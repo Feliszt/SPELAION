@@ -1,0 +1,7 @@
+# Photos #
+PYTHON/ImageRecognition/img/*
+PYTHON/ImageSearch/img/*
+PYTHON/TelephoneArabeImage/img/*
+
+# Neural Net #
+*.h5

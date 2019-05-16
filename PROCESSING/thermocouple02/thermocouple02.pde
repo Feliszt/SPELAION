@@ -1,12 +1,12 @@
 // Example by Tom Igoe
 import processing.serial.*;
 Serial myPort;  // The serial port
-String val;
+String val; // test
 float valAsFloat;
 ArrayList<Float> vals = new ArrayList<Float>();
 int numVals = 100;
-float border = 0.1;
-float tempMin = 30.0;
+float border = 0.05;
+float tempMin = 20.0;
 float tempMax = 100.0;
 
 // OSC
