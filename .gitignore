@@ -5,3 +5,6 @@ PYTHON/TelephoneArabeImage/img/*
 
 # Neural Net #
 *.h5
+
+# Others #
+OTHER/*

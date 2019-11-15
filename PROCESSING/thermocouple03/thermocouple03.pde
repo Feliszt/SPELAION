@@ -64,6 +64,8 @@ void draw() {
     }
   }
   
+  println(valAsFloat);
+  
   rectH = map(valAsFloat, 20, 50, height - 416, height - 214);
   
   fill(255, 0, 0);
@@ -72,13 +74,13 @@ void draw() {
   
   PImage imToShow = new PImage();
   
-  if(valAsFloat >= 10 && valAsFloat < 20) {
+  if(valAsFloat >= 00 && valAsFloat < 30) {
    imToShow = trump1; 
   }
-  if(valAsFloat >= 20 && valAsFloat < 30) {
+  if(valAsFloat >= 30 && valAsFloat < 35) {
    imToShow = trump2; 
   }
-  if(valAsFloat >= 30) {
+  if(valAsFloat >= 35) {
    imToShow = trump3; 
   }
   
