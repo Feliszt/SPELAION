@@ -16,9 +16,16 @@ import time
 
 class App:
     def __init__(self, _window, _args):
-        # window stuffx
+        # window stuff
         self.window = _window
-        self.window.geometry("100x100+100+100")
+
+        # set window size
+        winW = 200
+        winH = 200
+        winX = int(1920 * 0.5 - winW * 0.5)
+        winY = int(1080 * 0.5 - winH * 0.5)
+        winGeometry = "{}x{}+{}+{}".format(winW, winH, winX, winY)
+        self.window.geometry(winGeometry)
 
         # frames
         runButton = Button(self.window, text="RUN", command=self.runApps)
@@ -45,7 +52,7 @@ class App:
         # run both apps
         self.runApps()
 
-        # run main loop
+        self.window.protocol("WM_DELETE_WINDOW", self.killMainApp)
         self.window.mainloop()
 
     def runApps(self):
@@ -55,6 +62,10 @@ class App:
     def killApps(self):
         self.app01.kill()
         self.app02.kill()
+
+    def killMainApp(self):
+        self.killApps()
+        self.window.destroy()
 
 def main():
     # parse input
