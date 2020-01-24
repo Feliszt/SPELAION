@@ -1,7 +1,6 @@
 # --------------------------------------------------------
-#   APP01 of Collectif TOAST's ALFRED installation
-#   This app captures what a USB cam sees and perform
-#   a classification every frame.
+#   APP02 of Collectif TOAST's ALFRED installation
+#   This app runs a GAN and displays the result
 #
 #   Félix Côte, Benjamin Muzart / 2020
 # --------------------------------------------------------
@@ -20,10 +19,8 @@ class App:
         self.window.geometry(str(_appW) + "x" + str(_appH) + "+" + str(_appOffsetW) + "+0")
 
         # frames
-        self.canvasL = Canvas(self.window, width = _appW / 2, height = _appH, bd=0, highlightthickness=0, relief='ridge', bg="red")
-        self.canvasC = Canvas(self.window, width = _appW / 2, height = _appH, bd=0, highlightthickness=0, relief='ridge', bg="green")
-        self.canvasL.pack(side = LEFT)
-        self.canvasC.pack(side = LEFT)
+        self.canvasGAN = Canvas(self.window, width = _appW, height = _appH, bd=0, highlightthickness=0, relief='ridge', bg="blue")
+        self.canvasGAN.pack(side = LEFT)
 
         # After it is called once, the update method will be automatically called every delay milliseconds
         self.delay = 33    # 30 fps
