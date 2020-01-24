@@ -13,6 +13,9 @@ import sys
 
 class App:
     def __init__(self, _window, _appOffsetW, _appW, _appH):
+        # display info
+        print("Launching app02")
+
         # window stuffx
         self.window = _window
         self.window.overrideredirect(True)
