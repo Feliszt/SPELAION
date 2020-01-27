@@ -7,6 +7,10 @@
 
 # GUI
 from tkinter import *
+# OSC Server
+from pythonosc import dispatcher
+from pythonosc import osc_server
+import threading
 # misc
 import time
 import sys
@@ -23,6 +27,7 @@ class App:
         self.offX = _config["offX"] + int(_config["appW"] * 2 / 3)
         self.offY = _config["offY"]
         self.window.geometry("{}x{}+{}+{}".format(self.appW, self.appH, self.offX, self.offY))
+        self.frameCount = 0
 
         # frames
         self.canvasGAN = Canvas(self.window, width = self.appW, height = self.appH, bd=0, highlightthickness=0, relief='ridge', bg="blue")
@@ -35,6 +40,8 @@ class App:
 
     def update(self):
 
+        # update loop
+        self.frameCount += 1
         self.window.after(self.delay, self.update)
 
 def main():

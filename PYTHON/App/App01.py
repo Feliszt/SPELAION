@@ -11,6 +11,8 @@ from tkinter import *
 # video / images
 import cv2
 import PIL.Image, PIL.ImageTk
+# OSC Client
+from pythonosc import udp_client
 # misc
 import time
 import sys
@@ -29,6 +31,16 @@ class App:
         self.offX = _config["offX"]
         self.offY = _config["offY"]
         self.window.geometry("{}x{}+{}+{}".format(self.appW, self.appH, self.offX, self.offY))
+        self.frameCount = 0
+
+        # Set OSC addresses and ports
+        self.OSCAddr = _config["OSC_addr"]
+        self.OSCPortApp02 = _config["OSC_port_App02"]
+        self.OSCPortApp03 = _config["OSC_port_App03"]
+
+        # OSC clients
+        self.OSCClientToApp02 = udp_client.SimpleUDPClient(self.OSCAddr, self.OSCPortApp02)
+        self.OSCClientToApp03 = udp_client.SimpleUDPClient(self.OSCAddr, self.OSCPortApp03)
 
         # cam stuff
         self.camIndex = _config["camIndex"]
@@ -56,6 +68,15 @@ class App:
             self.img = PIL.ImageTk.PhotoImage(image = PIL.Image.fromarray(frame))
             self.canvasVIDEO.create_image(self.camPosX, self.camPosY, image = self.img, anchor = CENTER)
 
+        # Run classification neural network
+
+        # Send top-1 class to App02
+        self.OSCClientToApp02.send_message("/changeImage", 0)
+
+        # Send 1000x1 tensor to App03's GAN as input
+
+        # update loop
+        self.frameCount += 1
         self.window.after(self.delay, self.update)
 
 # video capture class
@@ -66,7 +87,7 @@ class VideoCapture:
         if not self.cam.isOpened():
             raise ValueError("Unable to open video source", _video_source)
         else:
-            print("Setting up camera with input size [" + str(_camW) + "," + str(_camH) + "] successful")
+            print("[APP01] Setting up camera with input size [" + str(_camW) + "," + str(_camH) + "] successful")
 
         # Set video size
         self.cam.set(cv2.CAP_PROP_FRAME_WIDTH, _camW)

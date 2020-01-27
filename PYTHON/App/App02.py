@@ -10,6 +10,10 @@
 from tkinter import *
 # image
 import PIL.Image, PIL.ImageTk
+# OSC Server
+from pythonosc import dispatcher
+from pythonosc import osc_server
+import threading
 # misc
 import time
 import sys
@@ -28,6 +32,20 @@ class App:
         self.offX = _config["offX"] + int(_config["appW"] * 1 / 3)
         self.offY = _config["offY"]
         self.window.geometry("{}x{}+{}+{}".format(self.appW, self.appH, self.offX, self.offY))
+        self.frameCount = 0
+
+        # OSC server
+        self.OSCAddr = _config["OSC_addr"]
+        self.OSCPortApp02 = _config["OSC_port_App02"]
+
+        # Set dispatcher
+        self.dispatcher = dispatcher.Dispatcher()
+        self.dispatcher.map("/changeImage", self.changeImage)
+
+        # Launch OSC Server
+        self.server = osc_server.ThreadingOSCUDPServer((self.OSCAddr, self.OSCPortApp02), self.dispatcher)
+        self.serverThread = threading.Thread(target = self.server.serve_forever)
+        self.serverThread.start()
 
         # canvas
         self.canvasCLASS = Canvas(self.window, width = self.appW, height = self.appH, bd=0, highlightthickness=0, relief='ridge', bg="green")
@@ -44,6 +62,7 @@ class App:
         imgPath = self.imgPaths[0]
         self.imgToDisplay = PIL.Image.open(imgPath)
         self.imgToDisplay = PIL.ImageTk.PhotoImage(self.imgToDisplay)
+        self.changeImg = False
 
         # After it is called once, the update method will be automatically called every delay milliseconds
         self.delay = 16    # 30 fps
@@ -51,14 +70,21 @@ class App:
         self.window.mainloop()
 
     def update(self):
-        # display strob Image
-        if random.random() < 0.5 :
+        # update image
+        if self.changeImg == True:
             file = self.imgPaths[random.randint(0, len(self.imgPaths) - 1)]
             self.imgToDisplay = PIL.Image.open(file)
             self.imgToDisplay = PIL.ImageTk.PhotoImage(self.imgToDisplay)
             self.canvasCLASS.create_image(self.imgPosX, self.imgPosY, image = self.imgToDisplay, anchor = CENTER)
 
+        # update loop
+        self.frameCount += 1
+        self.changeImg = False
         self.window.after(self.delay, self.update)
+
+    def changeImage(self, unused_addr, args):
+        self.changeImg = True
+
 
     # get images from folder
     def getImgPaths(self, _path):
@@ -81,7 +107,6 @@ def main():
 
     # run App
     App(Tk(), config)
-
 
 if __name__ == "__main__":
     main()
