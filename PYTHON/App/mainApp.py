@@ -8,20 +8,19 @@
 # GUI
 from  tkinter import *
 # misc
-import argparse
 import time
 import sys
 import subprocess
 import time
 
 class App:
-    def __init__(self, _window, _args):
+    def __init__(self, _window):
         # window stuff
         self.window = _window
 
         # set window size
-        winW = 200
-        winH = 200
+        winW = 400
+        winH = 400
         winX = int(1920 * 0.5 - winW * 0.5)
         winY = int(1080 * 0.5 - winH * 0.5)
         winGeometry = "{}x{}+{}+{}".format(winW, winH, winX, winY)
@@ -36,18 +35,17 @@ class App:
         # set App 01
         # app that runs VideoCapture and Image Classification
         # part 1 and 2 of ALFRED's tryptic
-        app01offX = int(_args.offx)
-        app01W = int(_args.appw * 2 / 3)
-        app01H = int(_args.apph)
-        self.runApp01 = "python.exe App01.py {} {} {}".format(app01offX, app01W, app01H)
+        self.runApp01 = "python.exe App01.py &"
 
         # set App 02
+        # app that displays result images
+        # part 2 of ALFRED's tryptic
+        self.runApp02 = "python.exe App02.py &"
+
+        # set App 03
         # app that runs GAN
         # part 3 of ALFRED's tryptic
-        app02offX = int(_args.offx + _args.appw * 2 / 3)
-        app02W = int(_args.appw * 1 / 3)
-        app02H = int(_args.apph)
-        self.runApp02 = "python.exe App02.py {} {} {} &".format(app02offX, app02W, app02H)
+        self.runApp03 = "python.exe App03.py &"
 
         # run both apps
         self.runApps()
@@ -58,25 +56,21 @@ class App:
     def runApps(self):
         self.app01 = subprocess.Popen(self.runApp01)
         self.app02 = subprocess.Popen(self.runApp02)
+        self.app03 = subprocess.Popen(self.runApp03)
 
     def killApps(self):
+        print("Killing apps.\n")
         self.app01.kill()
         self.app02.kill()
+        self.app03.kill()
 
     def killMainApp(self):
         self.killApps()
         self.window.destroy()
 
 def main():
-    # parse input
-    parser = argparse.ArgumentParser(description='Run ALFRED.')
-    parser.add_argument('--offx', type=int, required=True)
-    parser.add_argument('--appw', type=int, required=True)
-    parser.add_argument('--apph', type=int, required=True)
-    args = parser.parse_args()
-
     # run App
-    App(Tk(), args)
+    App(Tk())
 
 
 if __name__ == "__main__":

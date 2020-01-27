@@ -16,84 +16,70 @@ import time
 import sys
 import os
 import random
+import json
 
+# App 01
 class App:
-    # init
-    def __init__(self, _window, _appOffsetW, _appW, _appH):
-        # display info
-        print("Launching app01")
-
-        # window stuffx
+    def __init__(self, _window, _config):
+        # set window
         self.window = _window
         self.window.overrideredirect(True)
-        self.window.geometry(str(_appW) + "x" + str(_appH) + "+" + str(_appOffsetW) + "+0")
+        self.appW = int(_config["appW"] * 1 / 3)
+        self.appH = _config["appH"]
+        self.offX = _config["offX"]
+        self.offY = _config["offY"]
+        self.window.geometry("{}x{}+{}+{}".format(self.appW, self.appH, self.offX, self.offY))
 
-        # frames
-        self.canvasVIDEO = Canvas(self.window, width = _appW / 2, height = _appH, bd=0, highlightthickness=0, relief='ridge', bg="red")
-        self.canvasCLASS = Canvas(self.window, width = _appW / 2, height = _appH, bd=0, highlightthickness=0, relief='ridge', bg="green")
+        # cam stuff
+        self.camIndex = _config["camIndex"]
+        self.camW = _config["camW"]
+        self.camH = _config["camH"]
+        self.camPosX = int(self.appW * 0.5)
+        self.camPosY = int(self.appH * 0.5)
+        self.cam = VideoCapture(self.camIndex, self.camW, self.camH)
+
+        # Create a canvas that can fit the above video source size
+        self.canvasVIDEO = Canvas(_window, width = self.appW, height = self.appH, bd=0, highlightthickness=0, relief='ridge', bg='red')
         self.canvasVIDEO.pack(side = LEFT)
-        self.canvasCLASS.pack(side = LEFT)
-
-        # video capture
-        self.video = VideoCapture(1, 1280, 720)
-
-        # strobe image
-        imgFolder = "D:/PERSO/_IMAGES/MSCOCO/train2014"
-        self.imgPaths = self.getImgPaths(imgFolder)
-        self.imgToDisplay = PIL.Image.open(self.imgPaths[0])
-        self.canvasCLASS.create_image(self.canvasCLASS.winfo_width() * 0.5, self.canvasCLASS.winfo_height() * 0.5, image = self.imgToDisplay, anchor = CENTER)
 
         # After it is called once, the update method will be automatically called every delay milliseconds
-        self.delay = 1    # 30 fps
+        self.delay = 16
         self.update()
+
+        # run main loop
         self.window.mainloop()
 
-    # update
     def update(self):
         # Get a frame from the video source
-        ret, frame = self.video.get_frame()
-
-        # display strob Image
-        if random.random() < 0.8 :
-            file = self.imgPaths[random.randint(0, len(self.imgPaths) - 1)]
-            self.imgToDisplay = PIL.Image.open(file)
-            self.canvasCLASS.create_image(self.canvasCLASS.winfo_width() * 0.5, self.canvasCLASS.winfo_height() * 0.5, image = self.imgToDisplay, anchor = CENTER)
-
-        # display image
+        ret, frame = self.cam.get_frame()
         if ret:
-            frame = PIL.ImageTk.PhotoImage(image = PIL.Image.fromarray(frame))
-            self.canvasVIDEO.create_image(self.canvasVIDEO.winfo_width() * 0.5, self.canvasVIDEO.winfo_height() * 0.5, image = frame, anchor = CENTER)
+            self.img = PIL.ImageTk.PhotoImage(image = PIL.Image.fromarray(frame))
+            self.canvasVIDEO.create_image(self.camPosX, self.camPosY, image = self.img, anchor = CENTER)
 
-        # update app
         self.window.after(self.delay, self.update)
 
-    # get images from folder
-    def getImgPaths(self, _path):
-        files = []
-        for r, d, f in os.walk(_path):
-            for file in f:
-                files.append(os.path.join(r, file))
-        return files
-
+# video capture class
 class VideoCapture:
     def __init__(self, _video_source, _camW, _camH):
         # Open the video source
-        self.vid = cv2.VideoCapture(_video_source)
-        if not self.vid.isOpened():
+        self.cam = cv2.VideoCapture(_video_source)
+        if not self.cam.isOpened():
             raise ValueError("Unable to open video source", _video_source)
+        else:
+            print("Setting up camera with input size [" + str(_camW) + "," + str(_camH) + "] successful")
 
         # Set video size
-        print("Setting up camera with input size [" + str(_camW) + "," + str(_camH) + "]")
-        self.vid.set(cv2.CAP_PROP_FRAME_WIDTH, _camW)
-        self.vid.set(cv2.CAP_PROP_FRAME_HEIGHT, _camH)
+        self.cam.set(cv2.CAP_PROP_FRAME_WIDTH, _camW)
+        self.cam.set(cv2.CAP_PROP_FRAME_HEIGHT, _camH)
 
         # Get video source width and height
-        self.width = self.vid.get(cv2.CAP_PROP_FRAME_WIDTH)
-        self.height = self.vid.get(cv2.CAP_PROP_FRAME_HEIGHT)
+        self.width = self.cam.get(cv2.CAP_PROP_FRAME_WIDTH)
+        self.height = self.cam.get(cv2.CAP_PROP_FRAME_HEIGHT)
 
+    # get frame
     def get_frame(self):
-        if self.vid.isOpened():
-            ret, frame = self.vid.read()
+        if self.cam.isOpened():
+            ret, frame = self.cam.read()
             if ret:
                 # Return a boolean success flag and the current frame converted to BGR
                 return (ret, cv2.rotate(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), cv2.ROTATE_90_CLOCKWISE))
@@ -104,18 +90,20 @@ class VideoCapture:
 
     # Release the video source when the object is destroyed
     def __del__(self):
-        if self.vid.isOpened():
-            self.vid.release()
-
+        if self.cam.isOpened():
+            self.cam.release()
 
 def main():
+    # show info
+    print("Running App01.")
+
     # parse arguments
-    appOffsetW = int(sys.argv[1])
-    appW = int(sys.argv[2])
-    appH = int(sys.argv[3])
+    #Read JSON data into the datastore variable
+    with open('config.json', 'r') as f:
+        config = json.load(f)
 
     # run App
-    App(Tk(), appOffsetW, appW, appH)
+    App(Tk(), config)
 
 
 if __name__ == "__main__":

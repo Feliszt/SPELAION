@@ -19,20 +19,25 @@ import random
 
 class App:
     # init
-    def __init__(self, _window, _appOffsetW, _appW, _appH):
-        # window stuffx
+    def __init__(self, _window):
+        # set window
         self.window = _window
         self.window.overrideredirect(True)
-        self.window.geometry(str(_appW) + "x" + str(_appH) + "+" + str(_appOffsetW) + "+0")
+        self.appW = int(1920 / 3)
+        self.appH = 1080
+        self.offX = int(1920 * 4 / 3)
+        self.offY = 0
+        self.window.geometry("{}x{}+{}+{}".format(self.appW, self.appH, self.offX, self.offY))
 
         # frames
-        self.canvasImg = Canvas(self.window, width = _appW, height = _appH, bd=0, highlightthickness=0, relief='ridge', bg="red")
+        self.canvasImg = Canvas(self.window, width = self.appW, height = self.appH, bd=0, highlightthickness=0, relief='ridge', bg="red")
         self.canvasImg.pack(side = LEFT)
 
         # strobe image
-        imgFolder = "D:/PERSO/_IMAGES/MSCOCO/train2014"
+        imgFolder = "D:/PERSO/_IMAGES/ALFRED/DATASET_50_IMAGES_TEST/_PROCESSED/"
         self.imgPaths = self.getImgPaths(imgFolder)
-        imgPath = self.imgPaths[0].replace("\\", '/')
+        self.imgPaths = [imgFolder + f for f in self.imgPaths]
+        imgPath = self.imgPaths[0]
         self.imgToDisplay = PIL.Image.open(imgPath)
         self.imgToDisplay = PIL.ImageTk.PhotoImage(self.imgToDisplay)
 
@@ -44,7 +49,7 @@ class App:
     # update
     def update(self):
         # display strob Image
-        if random.random() < 1 :
+        if random.random() < 0.5 :
             file = self.imgPaths[random.randint(0, len(self.imgPaths) - 1)]
             self.imgToDisplay = PIL.Image.open(file)
             self.imgToDisplay = PIL.ImageTk.PhotoImage(self.imgToDisplay)
@@ -58,13 +63,13 @@ class App:
         files = []
         for r, d, f in os.walk(_path):
             for file in f:
-                files.append(os.path.join(r, file))
+                files.append(file)
         return files
 
 
 def main():
     # run App
-    App(Tk(), 1920, 1920, 1080)
+    App(Tk())
 
 
 if __name__ == "__main__":
