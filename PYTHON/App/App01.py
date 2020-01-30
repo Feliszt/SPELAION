@@ -11,9 +11,16 @@ from tkinter import *
 # video / images
 import cv2
 import PIL.Image, PIL.ImageTk
+from skimage import transform
 # OSC Client
+from pythonosc import osc_message_builder
 from pythonosc import udp_client
+# TF
+import tensorflow as tf
+import tensorflow_hub as hub
+import threading
 # misc
+import numpy as np
 import time
 import sys
 import os
@@ -32,6 +39,8 @@ class App:
         self.offY = _config["offY"]
         self.window.geometry("{}x{}+{}+{}".format(self.appW, self.appH, self.offX, self.offY))
         self.frameCount = 0
+        self.prevTime = 0
+        self.fps = 0
 
         # Set OSC addresses and ports
         self.OSCAddr = _config["OSC_addr"]
@@ -50,34 +59,112 @@ class App:
         self.camPosY = int(self.appH * 0.5)
         self.cam = VideoCapture(self.camIndex, self.camW, self.camH)
 
+        # crop stuff
+        self.cropMinW = _config["cropMinW"]
+        self.cropMaxW = _config["cropMaxW"]
+        self.cropMinH = _config["cropMinH"]
+        self.cropMaxH = _config["cropMaxH"]
+
+        # load labels
+        self.labels = self.getLabelsFromFile(_config["labelsFile"])
+
+        # load classifier
+        self.runTF = _config["runTF"]
+        if(self.runTF):
+            tf.compat.v1.reset_default_graph()
+            self.classifier = hub.Module(_config["classifierNetwork"])
+            self.classifierInputH, self.classifierInputW = hub.get_expected_image_size(self.classifier)
+            self.classifierInput = tf.placeholder(tf.float32, shape=(None, self.classifierInputH, self.classifierInputW, 3))
+            self.classifierOutput = tf.nn.softmax(self.classifier(self.classifierInput))
+
+            # init session
+            classifierConfig = tf.ConfigProto()
+            classifierConfig.gpu_options.per_process_gpu_memory_fraction = _config["classifierGPURatio"]
+            self.sess = tf.Session(config=classifierConfig)
+            self.sess.run(tf.global_variables_initializer())
+
         # Create a canvas that can fit the above video source size
-        self.canvasVIDEO = Canvas(_window, width = self.appW, height = self.appH, bd=0, highlightthickness=0, relief='ridge', bg='red')
+        self.canvasVIDEO = Canvas(_window, width = self.appW, height = self.appH, bd=0, highlightthickness=0, relief='ridge', bg='black')
         self.canvasVIDEO.pack(side = LEFT)
 
         # After it is called once, the update method will be automatically called every delay milliseconds
-        self.delay = 16
+        self.delay = 50
         self.update()
-
-        # run main loop
         self.window.mainloop()
 
     def update(self):
+        # compute fps
+        currTime = time.time()
+        deltaTime = currTime - self.prevTime
+        self.fps = 1 / deltaTime
+
         # Get a frame from the video source
         ret, frame = self.cam.get_frame()
         if ret:
             self.img = PIL.ImageTk.PhotoImage(image = PIL.Image.fromarray(frame))
             self.canvasVIDEO.create_image(self.camPosX, self.camPosY, image = self.img, anchor = CENTER)
 
-        # Run classification neural network
+            # Run classification neural network
+            if(self.runTF):
+                # perform classification
+                if(threading.active_count()) <= 5:
+                    t = threading.Thread(target=self.classify, args=(frame,))
+                    t.start()
 
-        # Send top-1 class to App02
-        self.OSCClientToApp02.send_message("/changeImage", 0)
+        # compute delay time for fixed FPS
+        elapsedUpdate = (time.time() - currTime) * 1000
+        timeToDelay = int(self.delay - elapsedUpdate)
+        timeToDelay = max(1, timeToDelay)
 
-        # Send 1000x1 tensor to App03's GAN as input
+        # display info
+        #print("[APP01] delay = {}\t{} fps\t{} threads.".format(timeToDelay, int(self.fps), threading.active_count()))
 
         # update loop
         self.frameCount += 1
-        self.window.after(self.delay, self.update)
+        self.prevTime = currTime
+        self.window.after(timeToDelay, self.update)
+
+    # perform classification
+    def classify(self, _frame):
+        # crop image
+        frameCropped = _frame[self.cropMinH:-self.cropMaxH,self.cropMinW:-self.cropMaxW,:]
+
+        # resize image and prepare data
+        data = cv2.resize(frameCropped, (self.classifierInputH, self.classifierInputW))
+        data = data / 255
+
+        # run classification
+        y_pred = self.sess.run(self.classifierOutput, feed_dict={self.classifierInput: [data]})
+        y_pred = y_pred[0][1:]
+        maxInd = np.argsort(y_pred)
+        top1_name = self.labels[maxInd[-1]].replace(' ', '_')
+        top5_index = maxInd[-5:]
+        top5_prob = y_pred[maxInd[-5:]]
+
+
+        # send result over OSC to APP02
+        self.OSCClientToApp02.send_message("/changeImage", top1_name)
+
+        # send result over OSC to APP02
+        for ind, prob in zip(top5_index, top5_prob):
+            msgToApp03 = osc_message_builder.OscMessageBuilder(address = '/labels')
+            msgToApp03.add_arg(ind, arg_type='i')
+            msgToApp03.add_arg(prob, arg_type='f')
+            msgToApp03 = msgToApp03.build()
+            self.OSCClientToApp03.send(msgToApp03)
+
+    # get indexes
+    def getLabelsFromFile(self, _fileName) :
+        list = []
+        with open(_fileName, "r") as classesFile:
+            while True:
+                line = classesFile.readline()
+                if not line:
+                    break
+                line = line.strip()
+                name = line.split(',')[0]
+                list.append(name)
+        return list
 
 # video capture class
 class VideoCapture:
@@ -120,7 +207,7 @@ def main():
 
     # parse arguments
     #Read JSON data into the datastore variable
-    with open('config.json', 'r') as f:
+    with open('data/config.json', 'r') as f:
         config = json.load(f)
 
     # run App

@@ -33,6 +33,8 @@ class App:
         self.offY = _config["offY"]
         self.window.geometry("{}x{}+{}+{}".format(self.appW, self.appH, self.offX, self.offY))
         self.frameCount = 0
+        self.prevTime = 0
+        self.fps = 0
 
         # OSC server
         self.OSCAddr = _config["OSC_addr"]
@@ -48,11 +50,11 @@ class App:
         self.serverThread.start()
 
         # canvas
-        self.canvasCLASS = Canvas(self.window, width = self.appW, height = self.appH, bd=0, highlightthickness=0, relief='ridge', bg="green")
+        self.canvasCLASS = Canvas(self.window, width = self.appW, height = self.appH, bd=0, highlightthickness=0, relief='ridge', bg="black")
         self.canvasCLASS.pack(side = LEFT)
 
         # img stuff
-        self.imgFolder = "D:/PERSO/_IMAGES/ALFRED/DATASET_50_IMAGES_TEST/_PROCESSED/"
+        self.imgFolder = _config["imgFolder"]
         self.imgPaths = self.getImgPaths(self.imgFolder)
         self.imgPaths = [self.imgFolder + f for f in self.imgPaths]
         self.imgPosX = int(self.appW * 0.5)
@@ -65,26 +67,45 @@ class App:
         self.changeImg = False
 
         # After it is called once, the update method will be automatically called every delay milliseconds
-        self.delay = 16    # 30 fps
+        self.delay = 20    # 30 fps
         self.update()
         self.window.mainloop()
 
     def update(self):
+        # compute fps
+        currTime = time.time()
+        deltaTime = currTime - self.prevTime
+        self.fps = 1 / deltaTime
+
         # update image
         if self.changeImg == True:
-            file = self.imgPaths[random.randint(0, len(self.imgPaths) - 1)]
+            # display image
+            file = self.imgFolder + self.imgLabel + ".jpg"
             self.imgToDisplay = PIL.Image.open(file)
             self.imgToDisplay = PIL.ImageTk.PhotoImage(self.imgToDisplay)
             self.canvasCLASS.create_image(self.imgPosX, self.imgPosY, image = self.imgToDisplay, anchor = CENTER)
 
+        # update image change
+        self.changeImg = False
+
+        # compute delay time for fixed FPS
+        elapsedUpdate = (time.time() - currTime) * 1000
+        timeToDelay = int(self.delay - elapsedUpdate)
+        timeToDelay = max(1, timeToDelay)
+
+        # display info
+        #print("[APP02] delay = {}\t{} fps".format(timeToDelay, int(self.fps)))
+
         # update loop
         self.frameCount += 1
-        self.changeImg = False
+        self.prevTime = currTime
         self.window.after(self.delay, self.update)
 
     def changeImage(self, unused_addr, args):
         self.changeImg = True
+        self.imgLabel = args
 
+        #print("[APP02] res = {}".format(self.imgLabel))
 
     # get images from folder
     def getImgPaths(self, _path):
@@ -102,7 +123,7 @@ def main():
 
     # parse arguments
     #Read JSON data into the datastore variable
-    with open('config.json', 'r') as f:
+    with open('data/config.json', 'r') as f:
         config = json.load(f)
 
     # run App
