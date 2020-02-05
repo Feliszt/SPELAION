@@ -32,6 +32,7 @@ class App:
     def __init__(self, _window, _config):
         # set window
         self.window = _window
+        self.window.title("APP01 - Classification")
         self.window.overrideredirect(True)
         self.appW = int(_config["appW"] * 1 / 3)
         self.appH = _config["appH"]
@@ -71,6 +72,7 @@ class App:
         # load classifier
         self.runTF = _config["runTF"]
         if(self.runTF):
+            # get network data
             tf.compat.v1.reset_default_graph()
             self.classifier = hub.Module(_config["classifierNetwork"])
             self.classifierInputH, self.classifierInputW = hub.get_expected_image_size(self.classifier)
@@ -82,6 +84,7 @@ class App:
             classifierConfig.gpu_options.per_process_gpu_memory_fraction = _config["classifierGPURatio"]
             self.sess = tf.Session(config=classifierConfig)
             self.sess.run(tf.global_variables_initializer())
+            self.topK = _config["topK"]
 
         # Create a canvas that can fit the above video source size
         self.canvasVIDEO = Canvas(_window, width = self.appW, height = self.appH, bd=0, highlightthickness=0, relief='ridge', bg='black')
@@ -138,15 +141,14 @@ class App:
         y_pred = y_pred[0][1:]
         maxInd = np.argsort(y_pred)
         top1_name = self.labels[maxInd[-1]].replace(' ', '_')
-        top5_index = maxInd[-5:]
-        top5_prob = y_pred[maxInd[-5:]]
-
+        topk_index = maxInd[-self.topK:]
+        topk_prob = y_pred[maxInd[-self.topK:]]
 
         # send result over OSC to APP02
         self.OSCClientToApp02.send_message("/changeImage", top1_name)
 
         # send result over OSC to APP02
-        for ind, prob in zip(top5_index, top5_prob):
+        for ind, prob in zip(topk_index, topk_prob):
             msgToApp03 = osc_message_builder.OscMessageBuilder(address = '/labels')
             msgToApp03.add_arg(ind, arg_type='i')
             msgToApp03.add_arg(prob, arg_type='f')
@@ -190,7 +192,7 @@ class VideoCapture:
             ret, frame = self.cam.read()
             if ret:
                 # Return a boolean success flag and the current frame converted to BGR
-                return (ret, cv2.rotate(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), cv2.ROTATE_90_CLOCKWISE))
+                return (ret, cv2.rotate(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), cv2.ROTATE_90_COUNTERCLOCKWISE))
             else:
                 return (ret, None)
         else:

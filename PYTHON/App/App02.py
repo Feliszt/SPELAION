@@ -14,6 +14,8 @@ import PIL.Image, PIL.ImageTk
 from pythonosc import dispatcher
 from pythonosc import osc_server
 import threading
+# sound
+from playsound import playsound
 # misc
 import time
 import sys
@@ -26,6 +28,7 @@ class App:
     def __init__(self, _window, _config):
         # window stuffx
         self.window = _window
+        self.window.title("APP02 - Image strob")
         self.window.overrideredirect(True)
         self.appW = int(_config["appW"] * 1 / 3)
         self.appH = _config["appH"]
@@ -54,6 +57,8 @@ class App:
         self.canvasCLASS.pack(side = LEFT)
 
         # img stuff
+        self.imgLabel = ""
+        self.imgLabelOld = ""
         self.imgFolder = _config["imgFolder"]
         self.imgPaths = self.getImgPaths(self.imgFolder)
         self.imgPaths = [self.imgFolder + f for f in self.imgPaths]
@@ -65,6 +70,10 @@ class App:
         self.imgToDisplay = PIL.Image.open(imgPath)
         self.imgToDisplay = PIL.ImageTk.PhotoImage(self.imgToDisplay)
         self.changeImg = False
+
+        # conjard easter egg
+        self.isConjard = _config["ConjardBool"]
+        self.conjardStrength = _config["ConjardStrength"]
 
         # After it is called once, the update method will be automatically called every delay milliseconds
         self.delay = 20    # 30 fps
@@ -104,6 +113,24 @@ class App:
     def changeImage(self, unused_addr, args):
         self.changeImg = True
         self.imgLabel = args
+
+        # easter conjard
+        if self.isConjard :
+            if random.random() <= self.conjardStrength :
+                self.imgLabel = "african_hunting_dog"
+
+        # check difference
+        #if self.imgLabelOld != self.imgLabel:
+            # random from folder
+            #ind = int(random.random() * 20 + 1)
+            #soundFile = "D:/PERSO/_SOUNDS/Eliot/B_E (" + str(ind) + ").wav"
+
+            #
+            #soundFile = "D:/PERSO/_SOUNDS/Pop_01.wav"
+
+            #playsound(soundFile)
+
+        self.imgLabelOld = self.imgLabel
 
         #print("[APP02] res = {}".format(self.imgLabel))
 

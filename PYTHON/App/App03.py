@@ -21,7 +21,10 @@ import threading
 # GAN
 from scipy.stats import truncnorm
 import numpy as np
+from numpy import linalg as LA
 # misc
+import random
+import math
 import time
 import sys
 import json
@@ -31,6 +34,7 @@ class App:
     def __init__(self, _window, _config):
         # window stuffx
         self.window = _window
+        self.window.title("APP03 - GAN")
         self.window.overrideredirect(True)
         self.appW = int(_config["appW"] * 1 / 3)
         self.appH = _config["appH"]
@@ -55,7 +59,9 @@ class App:
         self.serverThread.start()
 
         # GAN stuff
-        self.frameNumber = 100
+        self.frameNumber = _config["frameMemory"]
+        self.topK = _config["topK"]
+        self.seedChangeSpeed = _config["seedChangeSpeed"]
         self.tensorInputs = []
         self.imgToDisplay = ""
         self.imgPosX = int(self.appW * 0.5)
@@ -79,6 +85,14 @@ class App:
             self.sess = tf.Session(config=classifierConfig)
             self.sess.run(tf.global_variables_initializer())
 
+            # load labels
+            self.labels = self.getLabelsFromFile(_config["labelsFile"])
+
+            # init seed
+            self.seed = random.random() * self.latent_size
+            self.targetSeed = self.seed
+            print("[APP01] seed = {}".format(self.seed))
+
         # frames
         self.canvasGAN = Canvas(self.window, width = self.appW, height = self.appH, bd=0, highlightthickness=0, relief='ridge', bg="black")
         self.canvasGAN.pack(side = LEFT)
@@ -94,17 +108,32 @@ class App:
         deltaTime = currTime - self.prevTime
         self.fps = int(1 / deltaTime)
 
-        # update tensorInputs
-        if len(self.tensorInputs) > self.frameNumber * 5:
-            self.tensorInputs = self.tensorInputs[-self.frameNumber*5:]
-
-        # create tensor from inputs
-        tensor = self.createTensor(self.tensorInputs)
-
         # if we allow TF
         if(self.runTF):
+            # update tensorInputs
+            if len(self.tensorInputs) > self.frameNumber * self.topK:
+                self.tensorInputs = self.tensorInputs[-self.frameNumber*self.topK:]
+
+            # create tensor from inputs and normalize it
+            tensor = self.createTensor(self.tensorInputs)
+
+            # change seed
+            if abs(self.seed - self.targetSeed) < 0.01 :
+                self.targetSeed = random.uniform(max(0, self.seed - 20), min(self.seed + 20, self.latent_size))
+                #print("[App03] Change seed to : {}".format(self.targetSeed))
+
+            # update seed
+            self.seed *= self.seedChangeSpeed
+            self.seed += (1-self.seedChangeSpeed) * self.targetSeed
+            #print("[App03] Seed : {}\tTarget : {}".format(self.seed, self.targetSeed))
+
+            # create readable list for debugging
+            tensorReadable = tensor[tensor>0.0]
+            indexes = np.where(tensor > 0.0)[1]
+            tensorReadable = list(zip([self.labels[i] for i in indexes], tensorReadable))
+
             # generate
-            img = self.generate(tensor, 25)
+            img = self.generate(tensor, self.seed)
 
             # update image
             img = PIL.Image.fromarray(img).resize((1080, 1080), PIL.Image.BICUBIC)
@@ -117,7 +146,7 @@ class App:
         timeToDelay = max(1, timeToDelay)
 
         # show info
-        print("[APP03] delay = {}\t{} fps.".format(timeToDelay, int(self.fps)))
+        #print("[APP03] delay = {}\t{} fps.".format(timeToDelay, int(self.fps)))
 
         # update loop
         self.frameCount += 1
@@ -125,12 +154,18 @@ class App:
         self.window.after(self.delay, self.update)
 
     # generate frame with GAN
-    def generate(self, y, seed):
-        # get z-tensor from seed
-        z = truncnorm.rvs(-2, 2, size=(1, self.latent_size), random_state = np.random.RandomState(seed)) * self.trunc
+    def generate(self, _y, _seed):
+        #
+        minSeed = int(math.floor(_seed))
+        maxSeed = int(minSeed + 1)
+        ratio = _seed - minSeed
+
+        zMin = truncnorm.rvs(-2.0, 2.0, size=(1, self.latent_size), random_state = np.random.RandomState(minSeed)) * self.trunc
+        zMax = truncnorm.rvs(-2.0, 2.0, size=(1, self.latent_size), random_state = np.random.RandomState(maxSeed)) * self.trunc
+        z = self.interpolate_hypersphere(zMin, zMax, ratio)
 
         # run session
-        feed_dict = {self.inputs['z']: z, self.inputs['y']:y, self.inputs['truncation']: self.trunc}
+        feed_dict = {self.inputs['z']: z, self.inputs['y']:_y, self.inputs['truncation']: self.trunc}
         img = self.sess.run(self.output, feed_dict=feed_dict)
 
         # postprocess the image
@@ -140,6 +175,17 @@ class App:
 
         return img
 
+    def interpolate_hypersphere(self, _v1, _v2, _ratio):
+        _v1_norm = LA.norm(_v1)
+        _v2_norm = LA.norm(_v2)
+        _v2_normalized = _v2 * (_v1_norm / _v2_norm)
+
+        interpolated = _v1 + (_v2_normalized - _v1) * _ratio
+        interpolated_norm =  LA.norm(interpolated)
+        interpolated_normalized = interpolated * (_v1_norm / interpolated_norm)
+
+        return interpolated_normalized
+
     # create tensor
     def createTensor(self, _input):
         # we start with a zero tensor
@@ -147,10 +193,10 @@ class App:
 
         # we add up each probability together
         for t in _input:
-            tensor[:,t[0]] = tensor[:,t[0]] + t[1]
+            tensor[:,t[0]] = tensor[:,t[0]] + t[1] * 0.1
 
         # normalize
-        tensor = tensor / 20
+        #tensor = tensor / max(0.1, np.amax(tensor)) * 0.8
 
         return tensor
 
@@ -158,6 +204,19 @@ class App:
     def getLabels(self, unused_addr, _ind, _prob):
         #print("[APP03] Receive {} @ {}".format(_ind, _prob))
         self.tensorInputs.append((_ind, _prob))
+
+    # get indexes
+    def getLabelsFromFile(self, _fileName) :
+        list = []
+        with open(_fileName, "r") as classesFile:
+            while True:
+                line = classesFile.readline()
+                if not line:
+                    break
+                line = line.strip()
+                name = line.split(',')[0]
+                list.append(name)
+        return list
 
 def main():
     # show info

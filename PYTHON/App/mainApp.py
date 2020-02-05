@@ -12,11 +12,17 @@ import time
 import sys
 import subprocess
 import time
+import json
+# OSC Server
+from pythonosc import dispatcher
+from pythonosc import osc_server
+import threading
 
 class App:
-    def __init__(self, _window):
+    def __init__(self, _window, _config):
         # window stuff
         self.window = _window
+        self.window.title("Main App")
 
         # set window size
         winW = 400
@@ -25,6 +31,22 @@ class App:
         winY = int(1080 * 0.5 - winH * 0.5)
         winGeometry = "{}x{}+{}+{}".format(winW, winH, winX, winY)
         self.window.geometry(winGeometry)
+
+        # Set dispatcher
+        self.dispatcher = dispatcher.Dispatcher()
+        self.dispatcher.map("/runApps", self.runAppsOSC)
+        self.dispatcher.map("/runApp01", self.runApp01OSC)
+        self.dispatcher.map("/runApp02", self.runApp02OSC)
+        self.dispatcher.map("/runApp03", self.runApp03OSC)
+        self.dispatcher.map("/killApps", self.killAppsOSC)
+        self.dispatcher.map("/killApp01", self.killApp01OSC)
+        self.dispatcher.map("/killApp02", self.killApp02OSC)
+        self.dispatcher.map("/killApp03", self.killApp03OSC)
+
+        # Launch OSC Server
+        self.server = osc_server.ThreadingOSCUDPServer((_config["MainApp_OSC_addr"], _config["MainApp_OSC_port"]), self.dispatcher)
+        self.serverThread = threading.Thread(target = self.server.serve_forever)
+        self.serverThread.start()
 
         # set App 01
         # app that runs VideoCapture and Image Classification
@@ -42,7 +64,9 @@ class App:
         self.runApp03Cmd = "python.exe App03.py &"
 
         # run all apps
+        self.first = True
         self.runApps()
+        self.first = False
 
         # frames
         runButton = Button(self.window, text="RUN", command=self.runApps)
@@ -67,9 +91,18 @@ class App:
         self.window.mainloop()
 
     def runApps(self):
-        self.app01 = subprocess.Popen(self.runApp01Cmd)
-        self.app02 = subprocess.Popen(self.runApp02Cmd)
-        self.app03 = subprocess.Popen(self.runApp03Cmd)
+        if(self.first) :
+            self.app01 = subprocess.Popen(self.runApp01Cmd)
+            self.app02 = subprocess.Popen(self.runApp02Cmd)
+            self.app03 = subprocess.Popen(self.runApp03Cmd)
+            return
+
+        self.runApp01()
+        self.runApp02()
+        self.runApp03()
+
+    def runAppsOSC(self, unused_addr):
+        self.runApps()
 
     def runApp01(self):
         # kill app if already running
@@ -79,6 +112,9 @@ class App:
         # run app
         self.app01 = subprocess.Popen(self.runApp01Cmd)
 
+    def runApp01OSC(self, unused_addr):
+        self.runApp01()
+
     def runApp02(self):
         # kill app if already running
         if self.app02.poll() == None:
@@ -86,6 +122,9 @@ class App:
             self.killApp02()
         # run app
         self.app02 = subprocess.Popen(self.runApp02Cmd)
+
+    def runApp02OSC(self, unused_addr):
+        self.runApp02()
 
     def runApp03(self):
         # kill app if already running
@@ -95,17 +134,29 @@ class App:
         # run app
         self.app03 = subprocess.Popen(self.runApp03Cmd)
 
+    def runApp03OSC(self, unused_addr):
+        self.runApp03()
+
     def killApp01(self):
         print("Killing App01.")
         self.app01.kill()
+
+    def killApp01OSC(self, unused_addr):
+        self.killApp01()
 
     def killApp02(self):
         print("Killing App02.")
         self.app02.kill()
 
+    def killApp02OSC(self, unused_addr):
+        self.killApp02()
+
     def killApp03(self):
         print("Killing App03.")
         self.app03.kill()
+
+    def killApp03OSC(self, unused_addr):
+        self.killApp03()
 
     def killApps(self):
         print("Killing apps.\n")
@@ -113,13 +164,27 @@ class App:
         self.app02.kill()
         self.app03.kill()
 
+    def killAppsOSC(self, unused_addr):
+        self.killApps()
+
     def killMainApp(self):
         self.killApps()
         self.window.destroy()
 
+    def killMainAppOSC(self, unused_addr):
+        self.killMainApp()
+
 def main():
+    # show info
+    print("Running Main App.")
+
+    # parse arguments
+    #Read JSON data into the datastore variable
+    with open('data/config.json', 'r') as f:
+        config = json.load(f)
+
     # run App
-    App(Tk())
+    App(Tk(), config)
 
 
 if __name__ == "__main__":
