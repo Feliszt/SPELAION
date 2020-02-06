@@ -91,11 +91,15 @@ class App:
             # init seed
             self.seed = random.random() * self.latent_size
             self.targetSeed = self.seed
-            print("[APP01] seed = {}".format(self.seed))
+            self.GANMultiplier = _config["GANMultiplier"]
 
         # frames
         self.canvasGAN = Canvas(self.window, width = self.appW, height = self.appH, bd=0, highlightthickness=0, relief='ridge', bg="black")
         self.canvasGAN.pack(side = LEFT)
+
+        # log
+        self.log = _config["log"]
+        self.logInter = _config["logInter"]
 
         # After it is called once, the update method will be automatically called every delay milliseconds
         self.delay = 5    # 30 fps
@@ -120,12 +124,23 @@ class App:
             # change seed
             if abs(self.seed - self.targetSeed) < 0.01 :
                 self.targetSeed = random.uniform(max(0, self.seed - 20), min(self.seed + 20, self.latent_size))
+                # debug
                 #print("[App03] Change seed to : {}".format(self.targetSeed))
 
             # update seed
             self.seed *= self.seedChangeSpeed
             self.seed += (1-self.seedChangeSpeed) * self.targetSeed
+            # debug
             #print("[App03] Seed : {}\tTarget : {}".format(self.seed, self.targetSeed))
+
+
+            # write debug file
+            if self.log :
+                if int(currTime) % self.logInter == 0  and int(self.prevTime) % self.logInter != 0:
+                    with open("data/log.txt", 'a') as f:
+                        f.write("[{}] - [App03]\t@ {} fps\n".format(time.strftime('%X'), self.fps))
+                        f.write("[{}] - [App03]\tseed = {}\n".format(time.strftime('%X'), self.seed))
+                        f.write("[{}] - [App03]\ttargetSeed = {}\n".format(time.strftime('%X'), self.targetSeed))
 
             # create readable list for debugging
             tensorReadable = tensor[tensor>0.0]
@@ -193,16 +208,15 @@ class App:
 
         # we add up each probability together
         for t in _input:
-            tensor[:,t[0]] = tensor[:,t[0]] + t[1] * 0.1
-
-        # normalize
-        #tensor = tensor / max(0.1, np.amax(tensor)) * 0.8
+            tensor[:,t[0]] = tensor[:,t[0]] + t[1] * self.GANMultiplier
 
         return tensor
 
     # OSC classification reception
     def getLabels(self, unused_addr, _ind, _prob):
+        # debug
         #print("[APP03] Receive {} @ {}".format(_ind, _prob))
+
         self.tensorInputs.append((_ind, _prob))
 
     # get indexes
@@ -221,6 +235,8 @@ class App:
 def main():
     # show info
     print("Running App03.")
+    with open("data/log.txt", 'a') as f:
+        f.write( "[{}] - [App03] - Launching\n".format(time.strftime('%X')))
 
     # parse arguments
     #Read JSON data into the datastore variable

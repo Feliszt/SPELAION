@@ -23,6 +23,9 @@ class App:
         # window stuff
         self.window = _window
         self.window.title("Main App")
+        self.frameCount = 0
+        self.prevTime = 0
+        self.fps = 0
 
         # set window size
         winW = 400
@@ -32,21 +35,23 @@ class App:
         winGeometry = "{}x{}+{}+{}".format(winW, winH, winX, winY)
         self.window.geometry(winGeometry)
 
-        # Set dispatcher
-        self.dispatcher = dispatcher.Dispatcher()
-        self.dispatcher.map("/runApps", self.runAppsOSC)
-        self.dispatcher.map("/runApp01", self.runApp01OSC)
-        self.dispatcher.map("/runApp02", self.runApp02OSC)
-        self.dispatcher.map("/runApp03", self.runApp03OSC)
-        self.dispatcher.map("/killApps", self.killAppsOSC)
-        self.dispatcher.map("/killApp01", self.killApp01OSC)
-        self.dispatcher.map("/killApp02", self.killApp02OSC)
-        self.dispatcher.map("/killApp03", self.killApp03OSC)
+        # set osc
+        if _config["MainAPP_OSC_Toggle"]:
+            # Set dispatcher
+            self.dispatcher = dispatcher.Dispatcher()
+            self.dispatcher.map("/ALFRED/runApps", self.runAppsOSC)
+            self.dispatcher.map("/ALFRED/runApp01", self.runApp01OSC)
+            self.dispatcher.map("/ALFRED/runApp02", self.runApp02OSC)
+            self.dispatcher.map("/ALFRED/runApp03", self.runApp03OSC)
+            self.dispatcher.map("/ALFRED/killApps", self.killAppsOSC)
+            self.dispatcher.map("/ALFRED/killApp01", self.killApp01OSC)
+            self.dispatcher.map("/ALFRED/killApp02", self.killApp02OSC)
+            self.dispatcher.map("/ALFRED/killApp03", self.killApp03OSC)
 
-        # Launch OSC Server
-        self.server = osc_server.ThreadingOSCUDPServer((_config["MainApp_OSC_addr"], _config["MainApp_OSC_port"]), self.dispatcher)
-        self.serverThread = threading.Thread(target = self.server.serve_forever)
-        self.serverThread.start()
+            # Launch OSC Server
+            self.server = osc_server.ThreadingOSCUDPServer((_config["MainApp_OSC_addr"], _config["MainApp_OSC_port"]), self.dispatcher)
+            self.serverThread = threading.Thread(target = self.server.serve_forever)
+            self.serverThread.start()
 
         # set App 01
         # app that runs VideoCapture and Image Classification
@@ -86,9 +91,38 @@ class App:
         runApp03Button.pack()
         killApp03Button.pack()
 
+        # stuff
+        self.log = _config["log"]
+        self.logInter = _config["logInter"]
+
         # run main loop
+        self.delay = 16
         self.window.protocol("WM_DELETE_WINDOW", self.killMainApp)
+        self.update()
         self.window.mainloop()
+
+    def update(self):
+        # compute fps
+        currTime = time.time()
+        deltaTime = currTime - self.prevTime
+        self.fps = 1 / deltaTime
+
+        # write debug file
+        if self.log :
+            if self.frameCount > 600 and int(currTime) % (self.logInter+1) == 0  and int(self.prevTime) % (self.logInter+1) != 0:
+                with open("data/log.txt", 'a') as f:
+                    f.write( "------------------\n\n")
+
+
+        # compute delay time for fixed FPS
+        elapsedUpdate = (time.time() - currTime) * 1000
+        timeToDelay = int(self.delay - elapsedUpdate)
+        timeToDelay = max(1, timeToDelay)
+
+        # update loop
+        self.frameCount += 1
+        self.prevTime = currTime
+        self.window.after(timeToDelay, self.update)
 
     def runApps(self):
         if(self.first) :
@@ -101,7 +135,7 @@ class App:
         self.runApp02()
         self.runApp03()
 
-    def runAppsOSC(self, unused_addr):
+    def runAppsOSC(self, unused_addr, unused_value):
         self.runApps()
 
     def runApp01(self):
@@ -112,7 +146,7 @@ class App:
         # run app
         self.app01 = subprocess.Popen(self.runApp01Cmd)
 
-    def runApp01OSC(self, unused_addr):
+    def runApp01OSC(self, unused_addr, unused_value):
         self.runApp01()
 
     def runApp02(self):
@@ -123,7 +157,7 @@ class App:
         # run app
         self.app02 = subprocess.Popen(self.runApp02Cmd)
 
-    def runApp02OSC(self, unused_addr):
+    def runApp02OSC(self, unused_addr, unused_value):
         self.runApp02()
 
     def runApp03(self):
@@ -134,49 +168,78 @@ class App:
         # run app
         self.app03 = subprocess.Popen(self.runApp03Cmd)
 
-    def runApp03OSC(self, unused_addr):
+    def runApp03OSC(self, unused_addr, unused_value):
         self.runApp03()
 
     def killApp01(self):
+        #
         print("Killing App01.")
+        with open("data/log.txt", 'a') as f:
+            f.write( "[{}] - [App01] - Killing\n".format(time.strftime('%X')))
+
+        #
         self.app01.kill()
 
-    def killApp01OSC(self, unused_addr):
+    def killApp01OSC(self, unused_addr, unused_value):
         self.killApp01()
 
     def killApp02(self):
+        #
         print("Killing App02.")
+        with open("data/log.txt", 'a') as f:
+            f.write( "[{}] - [App02] - Killing\n".format(time.strftime('%X')))
+
+        #
         self.app02.kill()
 
-    def killApp02OSC(self, unused_addr):
+    def killApp02OSC(self, unused_addr, unused_value):
         self.killApp02()
 
     def killApp03(self):
+        #
         print("Killing App03.")
+        with open("data/log.txt", 'a') as f:
+            f.write( "[{}] - [App03] - Killing\n".format(time.strftime('%X')))
+
+        #
         self.app03.kill()
 
-    def killApp03OSC(self, unused_addr):
+    def killApp03OSC(self, unused_addr, unused_value):
         self.killApp03()
 
     def killApps(self):
+        #
         print("Killing apps.\n")
+        with open("data/log.txt", 'a') as f:
+            f.write( "[{}] - [MainApp] - Killing all apps\n".format(time.strftime('%X')))
+
+        #
         self.app01.kill()
         self.app02.kill()
         self.app03.kill()
 
-    def killAppsOSC(self, unused_addr):
+    def killAppsOSC(self, unused_addr, unused_value):
         self.killApps()
 
     def killMainApp(self):
+        #
         self.killApps()
+
+        #
+        with open("data/log.txt", 'a') as f:
+            f.write( "[{}] - [MainApp] - Killing main app\n".format(time.strftime('%X')))
+
+        #
         self.window.destroy()
 
-    def killMainAppOSC(self, unused_addr):
+    def killMainAppOSC(self, unused_addr, unused_value):
         self.killMainApp()
 
 def main():
     # show info
     print("Running Main App.")
+    with open("data/log.txt", 'a') as f:
+        f.write( "[{}] - [Main App] - Launching\n".format(time.strftime('%X')))
 
     # parse arguments
     #Read JSON data into the datastore variable

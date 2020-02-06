@@ -85,13 +85,24 @@ class App:
             self.sess = tf.Session(config=classifierConfig)
             self.sess.run(tf.global_variables_initializer())
             self.topK = _config["topK"]
+            self.classifierProb = _config["classifierProb"]
+        self.topk_index = [100]
+        self.topk_prob = [0.5]
+
 
         # Create a canvas that can fit the above video source size
         self.canvasVIDEO = Canvas(_window, width = self.appW, height = self.appH, bd=0, highlightthickness=0, relief='ridge', bg='black')
         self.canvasVIDEO.pack(side = LEFT)
 
+        # stuff
+        self.log = _config["log"]
+        self.logInter = _config["logInter"]
+        self.showDebug = _config["showApp01Debug"]
+
         # After it is called once, the update method will be automatically called every delay milliseconds
-        self.delay = 50
+        self.delay = _config["App01delay"]
+        self.delayHistoryTime = 10
+        self.delayHistory = []
         self.update()
         self.window.mainloop()
 
@@ -99,7 +110,7 @@ class App:
         # compute fps
         currTime = time.time()
         deltaTime = currTime - self.prevTime
-        self.fps = 1 / deltaTime
+        self.fps = int(1 / deltaTime)
 
         # Get a frame from the video source
         ret, frame = self.cam.get_frame()
@@ -108,11 +119,35 @@ class App:
             self.canvasVIDEO.create_image(self.camPosX, self.camPosY, image = self.img, anchor = CENTER)
 
             # Run classification neural network
-            if(self.runTF):
+            if(self.runTF and self.frameCount % self.classifierProb == 0):
+                # debug
+                #print("[App01] - PERFORM CLASSIFICATION")
+
+                # crop image
+                frameCropped = frame[self.cropMinH:-self.cropMaxH,self.cropMinW:-self.cropMaxW,:]
+
+                # resize image and prepare data
+                data = cv2.resize(frameCropped, (self.classifierInputH, self.classifierInputW))
+                data = data / 255
+
                 # perform classification
                 if(threading.active_count()) <= 5:
-                    t = threading.Thread(target=self.classify, args=(frame,))
+                    t = threading.Thread(target=self.classify, args=(data,))
                     t.start()
+
+        # send result over OSC to APP02
+        for ind, prob in zip(self.topk_index, self.topk_prob):
+            msgToApp03 = osc_message_builder.OscMessageBuilder(address = '/labels')
+            msgToApp03.add_arg(ind, arg_type='i')
+            msgToApp03.add_arg(prob, arg_type='f')
+            msgToApp03 = msgToApp03.build()
+            self.OSCClientToApp03.send(msgToApp03)
+
+        # write debug file
+        if self.log :
+            if int(currTime) % self.logInter == 0  and int(self.prevTime) % self.logInter != 0:
+                with open("data/log.txt", 'a') as f:
+                    f.write( "[{}] - [App01]\t@ {} fps\n".format(time.strftime('%X'), self.fps))
 
         # compute delay time for fixed FPS
         elapsedUpdate = (time.time() - currTime) * 1000
@@ -120,7 +155,8 @@ class App:
         timeToDelay = max(1, timeToDelay)
 
         # display info
-        #print("[APP01] delay = {}\t{} fps\t{} threads.".format(timeToDelay, int(self.fps), threading.active_count()))
+        if self.showDebug :
+            print("[APP01] delay = {}\ttimeToDelay = {} \t{} fps\t{} threads.".format(self.delay, timeToDelay, int(self.fps), threading.active_count()))
 
         # update loop
         self.frameCount += 1
@@ -128,32 +164,17 @@ class App:
         self.window.after(timeToDelay, self.update)
 
     # perform classification
-    def classify(self, _frame):
-        # crop image
-        frameCropped = _frame[self.cropMinH:-self.cropMaxH,self.cropMinW:-self.cropMaxW,:]
-
-        # resize image and prepare data
-        data = cv2.resize(frameCropped, (self.classifierInputH, self.classifierInputW))
-        data = data / 255
-
+    def classify(self, _data):
         # run classification
-        y_pred = self.sess.run(self.classifierOutput, feed_dict={self.classifierInput: [data]})
+        y_pred = self.sess.run(self.classifierOutput, feed_dict={self.classifierInput: [_data]})
         y_pred = y_pred[0][1:]
         maxInd = np.argsort(y_pred)
         top1_name = self.labels[maxInd[-1]].replace(' ', '_')
-        topk_index = maxInd[-self.topK:]
-        topk_prob = y_pred[maxInd[-self.topK:]]
+        self.topk_index = maxInd[-self.topK:]
+        self.topk_prob = y_pred[maxInd[-self.topK:]]
 
         # send result over OSC to APP02
         self.OSCClientToApp02.send_message("/changeImage", top1_name)
-
-        # send result over OSC to APP02
-        for ind, prob in zip(topk_index, topk_prob):
-            msgToApp03 = osc_message_builder.OscMessageBuilder(address = '/labels')
-            msgToApp03.add_arg(ind, arg_type='i')
-            msgToApp03.add_arg(prob, arg_type='f')
-            msgToApp03 = msgToApp03.build()
-            self.OSCClientToApp03.send(msgToApp03)
 
     # get indexes
     def getLabelsFromFile(self, _fileName) :
@@ -206,6 +227,8 @@ class VideoCapture:
 def main():
     # show info
     print("Running App01.")
+    with open("data/log.txt", 'a') as f:
+        f.write( "[{}] - [App01] - Launching\n".format(time.strftime('%X')))
 
     # parse arguments
     #Read JSON data into the datastore variable

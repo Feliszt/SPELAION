@@ -71,12 +71,16 @@ class App:
         self.imgToDisplay = PIL.ImageTk.PhotoImage(self.imgToDisplay)
         self.changeImg = False
 
+        # log
+        self.log = _config["log"]
+        self.logInter = _config["logInter"]
+
         # conjard easter egg
         self.isConjard = _config["ConjardBool"]
         self.conjardStrength = _config["ConjardStrength"]
 
         # After it is called once, the update method will be automatically called every delay milliseconds
-        self.delay = 20    # 30 fps
+        self.delay = 5    # 30 fps
         self.update()
         self.window.mainloop()
 
@@ -84,7 +88,7 @@ class App:
         # compute fps
         currTime = time.time()
         deltaTime = currTime - self.prevTime
-        self.fps = 1 / deltaTime
+        self.fps = int(1 / deltaTime)
 
         # update image
         if self.changeImg == True:
@@ -96,6 +100,14 @@ class App:
 
         # update image change
         self.changeImg = False
+
+        # write debug file
+        if self.log :
+            if int(currTime) % self.logInter == 0  and int(self.prevTime) % self.logInter != 0:
+                with open("data/log.txt", 'a') as f:
+                    c = """
+                    f.write( "[{}] - [App02]\t@ {} fps\n".format(time.strftime('%X'), self.fps))
+                    """
 
         # compute delay time for fixed FPS
         elapsedUpdate = (time.time() - currTime) * 1000
@@ -113,6 +125,11 @@ class App:
     def changeImage(self, unused_addr, args):
         self.changeImg = True
         self.imgLabel = args
+
+        #
+        if False:
+            with open("data/logLabels.txt", 'a') as f:
+                f.write( "{}\n".format(self.imgLabel))
 
         # easter conjard
         if self.isConjard :
@@ -147,6 +164,8 @@ class App:
 def main():
     # show info
     print("Running App02.")
+    with open("data/log.txt", 'a') as f:
+        f.write( "[{}] - [App02] - Launching\n".format(time.strftime('%X')))
 
     # parse arguments
     #Read JSON data into the datastore variable
